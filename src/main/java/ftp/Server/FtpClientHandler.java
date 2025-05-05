@@ -13,6 +13,7 @@ import java.util.Objects;
 public class FtpClientHandler implements Runnable {
     private final Socket socket;
     private Path currentDir = Paths.get("src/main/resources/ftp_root");
+    private int buffer_size=8192;
 
     public FtpClientHandler(Socket socket) {
         this.socket = socket;
@@ -159,7 +160,7 @@ public class FtpClientHandler implements Runnable {
 
         FileOutputStream fos = new FileOutputStream(parts[1]);
         //每次传输1kb
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[buffer_size];
         int bytesRead;
         while ((bytesRead = is.read(buffer)) != -1) {
             fos.write(buffer, 0, bytesRead);
@@ -186,20 +187,19 @@ public class FtpClientHandler implements Runnable {
 
         writer.write("开始传输\n");
         writer.flush();
-
         // 发送文件大小
         DataOutputStream dos = new DataOutputStream(os);
         dos.writeLong(file.length());
-
         // 发送文件内容
         FileInputStream fis = new FileInputStream(file);
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[buffer_size];
         int bytesRead;
         while ((bytesRead = fis.read(buffer)) != -1) {
             os.write(buffer, 0, bytesRead);
         }
         os.flush();
         fis.close();
+        writer.write("传输结束\n");
         writer.write("\n");
         writer.flush();
     }
