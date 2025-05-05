@@ -158,7 +158,14 @@ public class FtpClientHandler implements Runnable {
         // 接收客户端发送的文件大小（long类型）
         long fileSize = dis.readLong();
 
-        FileOutputStream fos = new FileOutputStream(parts[1]);
+        Path filePath = currentDir.resolve(parts[1]).normalize();
+        if (!filePath.startsWith(currentDir)) {
+            writer.write("非法路径，访问被拒绝\n\n");
+            writer.flush();
+            return;
+        }
+
+        FileOutputStream fos = new FileOutputStream(filePath.toFile());
         //每次传输1kb
         byte[] buffer = new byte[buffer_size];
         int bytesRead;
@@ -178,7 +185,15 @@ public class FtpClientHandler implements Runnable {
             writer.flush();
             return;
         }
-        File file = new File(parts[1]);
+        Path filePath = currentDir.resolve(parts[1]).normalize();
+
+        if (!filePath.startsWith(currentDir)) {
+            writer.write("非法路径，访问被拒绝\n\n");
+            writer.flush();
+            return;
+        }
+
+        File file = filePath.toFile();
         if (!file.exists() || !file.isFile()) {
             writer.write("文件不存在或不可读\n\n");
             writer.flush();
