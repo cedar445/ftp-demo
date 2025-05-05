@@ -27,9 +27,6 @@ public class FtpClientHandler implements Runnable {
         }
     }
 
-    private ServerSocket passiveDataSocket = new ServerSocket(0);
-    private Socket dataConnectionSocket = new ServerSocket(0).accept();
-
     @Override
     public void run() {
         try (
