@@ -68,7 +68,7 @@ public class FtpClientHandler implements Runnable {
                         return;
                     default:
                         writer.write("无法识别的命令\n");
-                        writer.write("输入help查看命令格式"+"\n");
+                        writer.write("命令格式错误，输入 HELP 查看命令格式"+"\n");
                         writer.flush();
                 }
             }
@@ -79,7 +79,7 @@ public class FtpClientHandler implements Runnable {
     private void handleList(String[] parts,BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=1){
-            writer.write("输入help查看命令格式"+"\n");
+            writer.write("命令格式错误，输入 HELP 查看命令格式"+"\n");
             writer.write("\n");
             writer.flush();
             return;
@@ -103,7 +103,7 @@ public class FtpClientHandler implements Runnable {
     private void handleCwd(String[] parts, BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=2){
-            writer.write("输入help查看命令格式"+"\n");
+            writer.write("命令格式错误，输入 HELP 查看命令格式"+"\n");
             writer.write("\n");
             writer.flush();
             return;
@@ -140,7 +140,7 @@ public class FtpClientHandler implements Runnable {
             writer.write("切换到目录:\n" + currentDir + "\n");
         }
         else{
-            writer.write("目标路径不存在");
+            writer.write("目标路径不存在\n");
         }
         writer.write("----------\n");
         writer.write("\n");
@@ -149,12 +149,13 @@ public class FtpClientHandler implements Runnable {
     private void handleStor(String[] parts, BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=2){
-            writer.write("输入help查看命令格式"+"\n");
+            writer.write("命令格式错误，输入 HELP 查看命令格式"+"\n");
             writer.write("\n");
             writer.flush();
             return;
         }
         writer.write("开始传输\n");
+        writer.write("\r\n");
         writer.flush();
         Path filePath = currentDir.resolve(parts[1]).normalize();
         if (!filePath.startsWith(currentDir)) {
@@ -162,27 +163,25 @@ public class FtpClientHandler implements Runnable {
             writer.flush();
             return;
         }
-
         try (ServerSocket dataServer = new ServerSocket(DATA_PORT)) {
-            Socket dataSocket = dataServer.accept(); // 阻塞直到客户端连接
-            OutputStream dataOut = dataSocket.getOutputStream();
-            Files.copy(filePath, dataOut); // 文件传输
-            dataOut.flush();
+            Socket dataSocket = dataServer.accept();
+            InputStream dataIn = dataSocket.getInputStream();
+            Files.copy(dataIn, filePath, StandardCopyOption.REPLACE_EXISTING);
             dataSocket.close();
         } catch (IOException e) {
-            writer.write("数据传输失败：" + e.getMessage() + "\n\n");
+            writer.write("数据接收失败：" + e.getMessage() + "\n\n");
             writer.flush();
             return;
         }
 
         writer.write("传输结束\n");
-        writer.write("\n");
+        writer.write("\r\n");
         writer.flush();
     }
     private void handleRetr(String[] parts, BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=2){
-            writer.write("输入help查看命令格式"+"\n");
+            writer.write("命令格式错误，输入 HELP 查看命令格式"+"\n");
             writer.write("\n");
             writer.flush();
             return;
@@ -200,23 +199,22 @@ public class FtpClientHandler implements Runnable {
             writer.flush();
             return;
         }
-
         writer.write("开始传输\n");
+        writer.write("\r\n");
         writer.flush();
-
         try (ServerSocket dataServer = new ServerSocket(DATA_PORT)) {
-            Socket dataSocket = dataServer.accept();
-            InputStream dataIn = dataSocket.getInputStream();
-            Files.copy(dataIn, filePath, StandardCopyOption.REPLACE_EXISTING);
+            Socket dataSocket = dataServer.accept(); // 阻塞直到客户端连接
+            OutputStream dataOut = dataSocket.getOutputStream();
+            Files.copy(filePath, dataOut); // 文件传输
+            dataOut.flush();
             dataSocket.close();
         } catch (IOException e) {
-            writer.write("数据接收失败：" + e.getMessage() + "\n\n");
+            writer.write("数据传输失败：" + e.getMessage() + "\n\n");
             writer.flush();
             return;
         }
-
         writer.write("传输结束\n");
-        writer.write("\n");
+        writer.write("\r\n");
         writer.flush();
     }
 }
