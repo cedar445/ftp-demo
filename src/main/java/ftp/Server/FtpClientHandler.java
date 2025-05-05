@@ -2,20 +2,23 @@ package ftp.Server;
 
 import java.io.*;
 import java.lang.reflect.Array;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.Objects;
 
 public class FtpClientHandler implements Runnable {
     private final Socket socket;
     private Path currentDir = Paths.get("src/main/resources/ftp_root");
-    private int buffer_size=8192;
+    private int buffer_size=1024;
+    private  final int DATA_PORT=30000;
 
-    public FtpClientHandler(Socket socket) {
+    public FtpClientHandler(Socket socket) throws IOException {
         this.socket = socket;
         try {
             Files.createDirectories(currentDir); // 确保目录存在
@@ -23,6 +26,9 @@ public class FtpClientHandler implements Runnable {
             e.printStackTrace();
         }
     }
+
+    private ServerSocket passiveDataSocket = new ServerSocket(0);
+    private Socket dataConnectionSocket = new ServerSocket(0).accept();
 
     @Override
     public void run() {
@@ -48,10 +54,10 @@ public class FtpClientHandler implements Runnable {
                         handleCwd(parts, writer);
                         break;
                     case "STOR":
-                        handleStor(parts, writer, socket.getInputStream());
+                        handleStor(parts, writer);
                         break;
                     case "RETR":
-                        handleRetr(parts, writer, socket.getOutputStream());
+                        handleRetr(parts, writer);
                         break;
                     case "HELP":
                         writer.write("命令如下:"+"\n");
@@ -143,7 +149,7 @@ public class FtpClientHandler implements Runnable {
         writer.write("\n");
         writer.flush();
     }
-    private void handleStor(String[] parts, BufferedWriter writer, InputStream is) throws IOException {
+    private void handleStor(String[] parts, BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=2){
             writer.write("输入help查看命令格式"+"\n");
@@ -153,11 +159,6 @@ public class FtpClientHandler implements Runnable {
         }
         writer.write("开始传输\n");
         writer.flush();
-        // 使用DataInputStream读取文件大小
-        DataInputStream dis = new DataInputStream(is);
-        // 接收客户端发送的文件大小（long类型）
-        long fileSize = dis.readLong();
-
         Path filePath = currentDir.resolve(parts[1]).normalize();
         if (!filePath.startsWith(currentDir)) {
             writer.write("非法路径，访问被拒绝\n\n");
@@ -165,19 +166,23 @@ public class FtpClientHandler implements Runnable {
             return;
         }
 
-        FileOutputStream fos = new FileOutputStream(filePath.toFile());
-        //每次传输1kb
-        byte[] buffer = new byte[buffer_size];
-        int bytesRead;
-        while ((bytesRead = is.read(buffer)) != -1) {
-            fos.write(buffer, 0, bytesRead);
+        try (ServerSocket dataServer = new ServerSocket(DATA_PORT)) {
+            Socket dataSocket = dataServer.accept(); // 阻塞直到客户端连接
+            OutputStream dataOut = dataSocket.getOutputStream();
+            Files.copy(filePath, dataOut); // 文件传输
+            dataOut.flush();
+            dataSocket.close();
+        } catch (IOException e) {
+            writer.write("数据传输失败：" + e.getMessage() + "\n\n");
+            writer.flush();
+            return;
         }
-        fos.close();
+
         writer.write("传输结束\n");
         writer.write("\n");
         writer.flush();
     }
-    private void handleRetr(String[] parts, BufferedWriter writer, OutputStream os) throws IOException {
+    private void handleRetr(String[] parts, BufferedWriter writer) throws IOException {
         //命令格式判断
         if(parts.length!=2){
             writer.write("输入help查看命令格式"+"\n");
@@ -186,7 +191,6 @@ public class FtpClientHandler implements Runnable {
             return;
         }
         Path filePath = currentDir.resolve(parts[1]).normalize();
-
         if (!filePath.startsWith(currentDir)) {
             writer.write("非法路径，访问被拒绝\n\n");
             writer.flush();
@@ -202,18 +206,18 @@ public class FtpClientHandler implements Runnable {
 
         writer.write("开始传输\n");
         writer.flush();
-        // 发送文件大小
-        DataOutputStream dos = new DataOutputStream(os);
-        dos.writeLong(file.length());
-        // 发送文件内容
-        FileInputStream fis = new FileInputStream(file);
-        byte[] buffer = new byte[buffer_size];
-        int bytesRead;
-        while ((bytesRead = fis.read(buffer)) != -1) {
-            os.write(buffer, 0, bytesRead);
+
+        try (ServerSocket dataServer = new ServerSocket(DATA_PORT)) {
+            Socket dataSocket = dataServer.accept();
+            InputStream dataIn = dataSocket.getInputStream();
+            Files.copy(dataIn, filePath, StandardCopyOption.REPLACE_EXISTING);
+            dataSocket.close();
+        } catch (IOException e) {
+            writer.write("数据接收失败：" + e.getMessage() + "\n\n");
+            writer.flush();
+            return;
         }
-        os.flush();
-        fis.close();
+
         writer.write("传输结束\n");
         writer.write("\n");
         writer.flush();

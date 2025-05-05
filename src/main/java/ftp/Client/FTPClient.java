@@ -16,6 +16,9 @@ public class FtpClient {
             while (true) {
                 System.out.print("请输入命令: ");
                 String command = scanner.nextLine();
+                String[] parts = command.trim().split(" ");
+                String cmd = parts[0].toUpperCase();
+
                 writer.write(command + "\n");
                 writer.flush();
 
@@ -23,6 +26,20 @@ public class FtpClient {
                     System.out.println(reader.readLine());
                     System.out.println(reader.readLine());
                     break;
+                } else if ("STOR".equalsIgnoreCase(cmd)) {
+                    if (parts.length != 2) {
+                        System.out.println("输入help查看命令格式");
+                        continue;
+                    }
+                    // 发送文件
+                    sendFile(socket, parts[1]);
+                } else if ("RETR".equalsIgnoreCase(cmd)) {
+                    if (parts.length != 2) {
+                        System.out.println("输入help查看命令格式");
+                        continue;
+                    }
+                    // 接收文件
+                    receiveFile(socket, parts[1]);
                 }
 
                 String line;
@@ -32,6 +49,44 @@ public class FtpClient {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private static void sendFile(Socket socket, String filePath) throws IOException {
+        File file = new File(filePath);
+        if (!file.exists() || !file.isFile()) {
+            System.out.println("文件不存在或不可读");
+            return;
+        }
+
+        try (DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
+             FileInputStream fis = new FileInputStream(file)) {
+            // 发送文件大小
+            dos.writeLong(file.length());
+
+            // 发送文件内容
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                dos.write(buffer, 0, bytesRead);
+            }
+        }
+    }
+
+    private static void receiveFile(Socket socket, String filePath) throws IOException {
+        try (DataInputStream dis = new DataInputStream(socket.getInputStream());
+             FileOutputStream fos = new FileOutputStream(filePath)) {
+            // 接收文件大小
+            long fileSize = dis.readLong();
+
+            // 接收文件内容
+            byte[] buffer = new byte[1024];
+            long totalBytesRead = 0;
+            int bytesRead;
+            while (totalBytesRead < fileSize && (bytesRead = dis.read(buffer)) != -1) {
+                fos.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+            }
         }
     }
 }
